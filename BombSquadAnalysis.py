@@ -9,26 +9,34 @@ counterValList = []
 class BombSquadAnalysis:
     def __init__(self, project, loop):
         self._LOOP_ITERATION_KEY = 'bombSquadLoopIteration'
+        self._LOOPED_FLAG_KEY = 'bombSquadLoopFlag'
         self._INSTRUMENTATION_KEY = 'bombSquadExecutionPath'
         self._ORIGINAL_CONSTRAINT_SETS_KEY = 'bombSquadOriginalConstraintSets'
         self.project = project
         self.loop = loop
         state = self.project.factory.blank_state(addr=loop.entry.addr)
         self.simgr = self.project.factory.simgr(state)
+        self.initInstrumentation(state)
+        self.findCommutativePaths()
+
+    def initInstrumentation(self, state):
         state.globals[self._LOOP_ITERATION_KEY] = 0
+        state.globals[self._LOOPED_FLAG_KEY] = False
         state.globals[self._INSTRUMENTATION_KEY] = []
 
         def incrementLoopCounter(state):
+            print 'loop counter incremented'
             state.globals[self._LOOP_ITERATION_KEY]+=1
+            state.globals[self._LOOPED_FLAG_KEY] = True
 
-        state.inspect.b('instruction', when=BP_BEFORE, instruction=loop.entry.addr, action=incrementLoopCounter)
+        state.inspect.b('instruction', when=BP_BEFORE, instruction=self.loop.entry.addr, action=incrementLoopCounter)
 
         def logPathTaken(state):
             newPathList = list(state.globals[self._INSTRUMENTATION_KEY])
             newPathList.append(state.block().addr)
             state.globals[self._INSTRUMENTATION_KEY] = newPathList
 
-        for block in loop.body_nodes:
+        for block in self.loop.body_nodes:
             state.inspect.b('instruction', when=BP_BEFORE, instruction=block.addr, action=logPathTaken)
 
     def findCommutativePaths(self):
@@ -47,13 +55,29 @@ class BombSquadAnalysis:
     def _getPathHashes(self, state):
         entirePath = list(state.globals[self._INSTRUMENTATION_KEY])
         splitPaths = [list(group) for k, group in groupby(entirePath, lambda x: x == self.loop.entry.addr) if not k]
+        # if entirePath[0] != self.loop.entry.addr:
+        #     splitPaths = splitPaths[:-1]
         splitPathTuples = [tuple(path) for path in splitPaths]
         splitPathHashes = [hash(t) for t in splitPathTuples]
+        print splitPathHashes
         return splitPathHashes
 
+    def exitedLoopOrAtEntry(self, state):
+        # return lambda state: (state.globals[self._LOOP_ITERATION_KEY] != 0) and (state.block().addr == self.loop.entry.addr or state.block().addr not in [node.addr for node in self.loop.body_nodes])
+        print 'checked'
+        if state.globals[self._LOOP_ITERATION_KEY] == 0:
+            return False
+        if state.block().addr == self.loop.entry.addr:
+            return True
+        else:
+            return state.block().addr not in [node.addr for node in self.loop.body_nodes]
+
     def canCollapseStates(self, s1, s2):
+        if s1.globals[self._LOOP_ITERATION_KEY] != s2.globals[self._LOOP_ITERATION_KEY] or s1.globals[self._LOOP_ITERATION_KEY] == 0:
+            return False
         p1 = self._getPathHashes(s1)
         p2 = self._getPathHashes(s2)
+        print 'checking collapsability on paths of length {} and {}'.format(len(p1), len(p2))
 
         pathsDoCommute = True
 
@@ -64,10 +88,12 @@ class BombSquadAnalysis:
         for i in range(len(p1)):
             if p1[i] == p2[i]:
                 #we're in great shape
+                print 'same hash'
                 continue
 
             if i+1 == len(p1):
                 #this means no swap can occur
+                print 'no more swaps can occur'
                 pathsDoCommute = False
                 break
 
@@ -76,6 +102,7 @@ class BombSquadAnalysis:
                 tmp = p2[i+1]
                 p2[i+1] = p2[i]
                 p2[i] = tmp
+                print 'swapped'
                 continue
 
             if p2[i] == p1[i+1] and self._pathHashesCommute(p1[i], p1[i+1]):
@@ -83,11 +110,17 @@ class BombSquadAnalysis:
                 tmp = p1[i+1]
                 p1[i+1] = p1[i]
                 p1[i] = tmp
+                print 'swapped'
                 continue
 
             #no way forward. break
             pathsDoCommute = False
             break;
+
+        if pathsDoCommute:
+            print list(s1.globals[self._INSTRUMENTATION_KEY])
+            print list(s2.globals[self._INSTRUMENTATION_KEY])
+            print self.exitedLoopOrAtEntry(s1), self.exitedLoopOrAtEntry(s2)
 
         return pathsDoCommute
 
@@ -156,17 +189,3 @@ class BombSquadAnalysis:
             self._deactivateStates()
 
         return simManager.stashes['done']
-
-proj = angr.Project("a.out", load_options={"auto_load_libs":False})
-proj.analyses.CFG()
-lf = proj.analyses.LoopFinder()
-
-for loop in lf.loops:
-    analysis = BombSquadAnalysis(proj, loop)
-    commutativePaths = analysis.findCommutativePaths()
-    print 'verifying paths can collapse'
-    for s1, s2 in commutativePaths:
-        print analysis.canCollapseStates(s1, s2)
-    print 'verifying non-commutative paths cannot collapse'
-    for s1, s2 in analysis.uniquePaths:
-        print analysis.canCollapseStates(s1, s2)
