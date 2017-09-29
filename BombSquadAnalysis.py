@@ -25,7 +25,6 @@ class BombSquadAnalysis:
         state.globals[self._INSTRUMENTATION_KEY] = []
 
         def incrementLoopCounter(state):
-            print 'loop counter incremented'
             state.globals[self._LOOP_ITERATION_KEY]+=1
             state.globals[self._LOOPED_FLAG_KEY] = True
 
@@ -59,12 +58,10 @@ class BombSquadAnalysis:
         #     splitPaths = splitPaths[:-1]
         splitPathTuples = [tuple(path) for path in splitPaths]
         splitPathHashes = [hash(t) for t in splitPathTuples]
-        print splitPathHashes
         return splitPathHashes
 
     def exitedLoopOrAtEntry(self, state):
         # return lambda state: (state.globals[self._LOOP_ITERATION_KEY] != 0) and (state.block().addr == self.loop.entry.addr or state.block().addr not in [node.addr for node in self.loop.body_nodes])
-        print 'checked'
         if state.globals[self._LOOP_ITERATION_KEY] == 0:
             return False
         if state.block().addr == self.loop.entry.addr:
@@ -77,7 +74,6 @@ class BombSquadAnalysis:
             return False
         p1 = self._getPathHashes(s1)
         p2 = self._getPathHashes(s2)
-        print 'checking collapsability on paths of length {} and {}'.format(len(p1), len(p2))
 
         pathsDoCommute = True
 
@@ -88,12 +84,10 @@ class BombSquadAnalysis:
         for i in range(len(p1)):
             if p1[i] == p2[i]:
                 #we're in great shape
-                print 'same hash'
                 continue
 
             if i+1 == len(p1):
                 #this means no swap can occur
-                print 'no more swaps can occur'
                 pathsDoCommute = False
                 break
 
@@ -102,7 +96,6 @@ class BombSquadAnalysis:
                 tmp = p2[i+1]
                 p2[i+1] = p2[i]
                 p2[i] = tmp
-                print 'swapped'
                 continue
 
             if p2[i] == p1[i+1] and self._pathHashesCommute(p1[i], p1[i+1]):
@@ -110,17 +103,11 @@ class BombSquadAnalysis:
                 tmp = p1[i+1]
                 p1[i+1] = p1[i]
                 p1[i] = tmp
-                print 'swapped'
                 continue
 
             #no way forward. break
             pathsDoCommute = False
             break;
-
-        if pathsDoCommute:
-            print list(s1.globals[self._INSTRUMENTATION_KEY])
-            print list(s2.globals[self._INSTRUMENTATION_KEY])
-            print self.exitedLoopOrAtEntry(s1), self.exitedLoopOrAtEntry(s2)
 
         return pathsDoCommute
 

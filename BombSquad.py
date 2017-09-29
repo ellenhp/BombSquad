@@ -15,7 +15,6 @@ class BombSquad(ExplorationTechnique):
 
     def step(self, simgr, stash, **kwargs):
         debug = len(simgr.stashes[stash]) > 10
-        print 'stepping', simgr
         for state in simgr.stashes[stash]:
             if self._INSTRUMENTATION_KEY not in state.globals.keys():
                 self.analysis.initInstrumentation(state)
@@ -24,22 +23,16 @@ class BombSquad(ExplorationTechnique):
         for state in simgr.stashes['deferred']:
             state.globals[self._LOOPED_FLAG_KEY] = False
         if len(simgr.stashes[stash]) == 0:
-            print 'no states in loop, pruning'
             statesToPrune = []
             for first, second in combinations(simgr.stashes['deferred'], 2):
                 if first in statesToPrune or second in statesToPrune:
-                    print 'already pruned one of {} and {}'.format(second.posix.dumps(0), first.posix.dumps(0))
                     continue
                 if self.analysis.canCollapseStates(first, second):
-                    print 'pruning state with input {} and keeping state with input {}'.format(second.posix.dumps(0), first.posix.dumps(0))
                     statesToPrune.append(second)
-                else:
-                    print 'not pruning either of {} and {}'.format(second.posix.dumps(0), first.posix.dumps(0))
 
             simgr.move(from_stash='deferred', to_stash='collapsed', filter_func=lambda state: state in statesToPrune)
             simgr.move(from_stash='deferred', to_stash=stash)
 
         simgr = simgr.step(stash=stash, n=1, **kwargs)
-
 
         return simgr

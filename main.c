@@ -3,6 +3,18 @@
 
 #define INPUT_LEN 4
 
+int evaluateRun(int counter1, int counter2, char* input) {
+    int i=0;
+    while (input[i] != '\0') {
+        i++;
+    }
+    if (counter1 == INPUT_LEN/2 && counter2 == (INPUT_LEN+1)/2) {
+        exit(1);
+    } else {
+        exit(0);
+    }
+}
+
 int main() {
     char input[INPUT_LEN+1];
     input[INPUT_LEN] = 0;
@@ -19,9 +31,5 @@ int main() {
         }
     }
 
-    if (counter1 == INPUT_LEN/2 && counter2 == (INPUT_LEN+1)/2) {
-        exit(1);
-    } else {
-        exit(0);
-    }
+    evaluateRun(counter1, counter2, input);
 }
