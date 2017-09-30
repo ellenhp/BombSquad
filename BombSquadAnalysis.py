@@ -11,8 +11,10 @@ class BombSquadAnalysis:
         self._LOOP_ITERATION_KEY = 'bombSquadLoopIteration'
         self._LOOPED_FLAG_KEY = 'bombSquadLoopFlag'
         self._INSTRUMENTATION_KEY = 'bombSquadExecutionPath'
+        self._LOOP_CONTEXT_KEY = 'bombSquadLoopContextKey'
         self.project = project
         self.loop = loop
+        print loop.entry.addr
         state = self.project.factory.blank_state(addr=loop.entry.addr)
         self.simgr = self.project.factory.simgr(state)
         self.initInstrumentation(state)
@@ -21,12 +23,18 @@ class BombSquadAnalysis:
     def initInstrumentation(self, state):
         state.globals[self._LOOP_ITERATION_KEY] = 0
         state.globals[self._LOOPED_FLAG_KEY] = False
-
+        state.globals[self._LOOP_CONTEXT_KEY] = None
         def incrementLoopCounter(state):
             state.globals[self._LOOP_ITERATION_KEY]+=1
             state.globals[self._LOOPED_FLAG_KEY] = True
 
+        def initLoopContext(state):
+            state.globals[self._LOOP_CONTEXT_KEY] = hash(tuple(state.history.bbl_addrs))
+
         state.inspect.b('instruction', when=BP_BEFORE, instruction=self.loop.entry.addr, action=incrementLoopCounter)
+
+        for entry_edge in self.loop.entry_edges:
+            state.inspect.b('instruction', when=BP_BEFORE, instruction=entry_edge[0], action=initLoopContext)
 
     def findCommutativePaths(self):
         states = self._loopTwice(self.simgr, self.loop)
@@ -61,6 +69,8 @@ class BombSquadAnalysis:
 
     def canCollapseStates(self, s1, s2):
         if s1.globals[self._LOOP_ITERATION_KEY] != s2.globals[self._LOOP_ITERATION_KEY] or s1.globals[self._LOOP_ITERATION_KEY] == 0:
+            return False
+        if s1.globals[self._LOOP_CONTEXT_KEY] is not s2.globals[self._LOOP_CONTEXT_KEY]:
             return False
         p1 = self._getPathHashes(s1)
         p2 = self._getPathHashes(s2)
