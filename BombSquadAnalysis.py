@@ -11,7 +11,6 @@ class BombSquadAnalysis:
         self._LOOP_ITERATION_KEY = 'bombSquadLoopIteration'
         self._LOOPED_FLAG_KEY = 'bombSquadLoopFlag'
         self._INSTRUMENTATION_KEY = 'bombSquadExecutionPath'
-        self._ORIGINAL_CONSTRAINT_SETS_KEY = 'bombSquadOriginalConstraintSets'
         self.project = project
         self.loop = loop
         state = self.project.factory.blank_state(addr=loop.entry.addr)
@@ -22,21 +21,12 @@ class BombSquadAnalysis:
     def initInstrumentation(self, state):
         state.globals[self._LOOP_ITERATION_KEY] = 0
         state.globals[self._LOOPED_FLAG_KEY] = False
-        state.globals[self._INSTRUMENTATION_KEY] = []
 
         def incrementLoopCounter(state):
             state.globals[self._LOOP_ITERATION_KEY]+=1
             state.globals[self._LOOPED_FLAG_KEY] = True
 
         state.inspect.b('instruction', when=BP_BEFORE, instruction=self.loop.entry.addr, action=incrementLoopCounter)
-
-        def logPathTaken(state):
-            newPathList = list(state.globals[self._INSTRUMENTATION_KEY])
-            newPathList.append(state.block().addr)
-            state.globals[self._INSTRUMENTATION_KEY] = newPathList
-
-        for block in self.loop.body_nodes:
-            state.inspect.b('instruction', when=BP_BEFORE, instruction=block.addr, action=logPathTaken)
 
     def findCommutativePaths(self):
         states = self._loopTwice(self.simgr, self.loop)
@@ -52,10 +42,11 @@ class BombSquadAnalysis:
         return self.commutativePaths
 
     def _getPathHashes(self, state):
-        entirePath = list(state.globals[self._INSTRUMENTATION_KEY])
+        entirePath = list(state.history.bbl_addrs)
+        # entirePath = [addr for addr in list(state.history.bbl_addrs) if addr in [node.addr for node in self.loop.body_nodes]]
         splitPaths = [list(group) for k, group in groupby(entirePath, lambda x: x == self.loop.entry.addr) if not k]
-        # if entirePath[0] != self.loop.entry.addr:
-        #     splitPaths = splitPaths[:-1]
+        if entirePath[0] != self.loop.entry.addr:
+            splitPaths = splitPaths[:-1]
         splitPathTuples = [tuple(path) for path in splitPaths]
         splitPathHashes = [hash(t) for t in splitPathTuples]
         return splitPathHashes
