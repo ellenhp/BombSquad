@@ -42,8 +42,7 @@ class BombSquadAnalysis:
         return self.commutativePaths
 
     def _getPathHashes(self, state):
-        entirePath = list(state.history.bbl_addrs)
-        # entirePath = [addr for addr in list(state.history.bbl_addrs) if addr in [node.addr for node in self.loop.body_nodes]]
+        entirePath = [addr for addr in list(state.history.bbl_addrs) if addr in [node.addr for node in self.loop.body_nodes]][::-1]
         splitPaths = [list(group) for k, group in groupby(entirePath, lambda x: x == self.loop.entry.addr) if not k]
         if entirePath[0] != self.loop.entry.addr:
             splitPaths = splitPaths[:-1]

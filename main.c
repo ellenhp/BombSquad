@@ -1,18 +1,20 @@
 #include <unistd.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdio.h>
 
-#define INPUT_LEN 4
+#define _MIN(a, b) ((a) < (b) ? (a) : (b))
+
+#define INPUT_LEN 100
 
 int evaluateRun(int counter1, int counter2, char* input) {
-    int i=0;
-    while (input[i] != '\0') {
-        i++;
+    char target[] = "BAABAAABBBAAABBAABBABAAABBAABBBAAABAAAAAAAABABABBAAAABBAAAAABABBAABBBBAAABAABBABBAAAABABABBBABBAABBBBAAAABAABBAABAAABAABBBAAABABAABABAAABAAAAAAAAAABBBBBAABAAAABAAABABBBBBABAABBAABBBAAAABABBAABABAABABB";
+    for (int i = 0; i < _MIN(INPUT_LEN, sizeof(target)-1); i++) {
+        if (target[i] != input[i]) {
+            exit(0);
+        }
     }
-    if (counter1 == INPUT_LEN/2 && counter2 == (INPUT_LEN+1)/2) {
-        exit(1);
-    } else {
-        exit(0);
-    }
+    exit(1);
 }
 
 int main() {
@@ -24,10 +26,10 @@ int main() {
     int counter2 = 0;
     for (int i = 0; i < INPUT_LEN; i++) {
         if (input[i] == 'A') {
-            counter1++;
+            counter1 += 1;
         }
         if (input[i] == 'B' ) {
-            counter2++;
+            counter2 += 1;
         }
     }
 
