@@ -7,7 +7,9 @@ def runTest(veritesting):
     proj = angr.Project("a.out", load_options={"auto_load_libs":False})
     proj.analyses.CFG()
     lf = proj.analyses.LoopFinder()
-    analysis = BombSquadAnalysis(proj, lf.loops[3])
+    loop = lf.loops[3]
+    analysis = BombSquadAnalysis(proj, loop)
+    print 'working on loop at', hex(loop.entry.addr)
 
     proj = angr.Project("a.out", load_options={"auto_load_libs":False})
     s = proj.factory.entry_state()

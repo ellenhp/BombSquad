@@ -5,7 +5,16 @@
 
 #define _MIN(a, b) ((a) < (b) ? (a) : (b))
 
-#define INPUT_LEN 5
+#define INPUT_LEN 50
+
+// This will make veritesting take a very very long time. INPUT_LEN needs to be quite low for reasonable completeion times.
+// #define ANTI_VERITESTING
+
+#ifdef ANTI_VERITESTING
+#define INCR(A) collatzStep(&A)
+#else
+#define INCR(A) A++
+#endif
 
 int evaluateRun(char* input, char* flag) {
     for (int i = 0; i < INPUT_LEN; i++) {
@@ -17,7 +26,7 @@ int evaluateRun(char* input, char* flag) {
 }
 
 int evaluateRun1(char* input) {
-    char flag[] = "FAKE_HAHAAAABBBAAABBAABBABAAABBAABBBAAABAAAAAAAABABABBAAAABBAAAAABABBAABBBBAAABAABBABBAAAABABABBBABBAABBBBAAAABAABBAABAAABAABBBAAABABAABABAAABAAAAAAAAAABBBBBAABAAAABAAABABBBBBABAABBAABBBAAAABABBAABABAABABB";
+    char flag[] = "BBBAAABAAAAAAAAAAABBBAAABBAABBABAAABBAABBBAAABAAAAAAAABABABBAAAABBAAAAABABBAABBBBAAABAABBABBAAAABABABBBABBAABBBBAAAABAABBAABAAABAABBBAAABABAABABAAABAAAAAAAAAABBBBBAABAAAABAAABABBBBBABAABBAABBBAAAABABB";
     return evaluateRun(input, flag);
 }
 
@@ -26,30 +35,39 @@ int evaluateRun2(char* input) {
     return evaluateRun(input, flag);
 }
 
-int doRun(char* out) {
-    char buf[INPUT_LEN+1];
+void collatzStep(int* val) {
+    if (*val % 2) {
+        *val = *val * 3 + 1;
+    }
+    else {
+        *val = *val / 2;
+    }
+    *val++;
+}
+
+int doRun(char* buf) {
     read(0, buf, INPUT_LEN);
     int counter1 = 0;
     int counter2 = 0;
     for (int i = 0; i < INPUT_LEN; i++) {
         if (buf[i] == 'A') {
-            counter1 += 1;
+            INCR(counter1);
         }
         if (buf[i] == 'B' ) {
-            counter2 += 1;
+            INCR(counter1);
         }
     }
-    memcpy(out, buf, INPUT_LEN);
     return counter1 * counter2;
 }
 
 int main() {
     char buf[INPUT_LEN+1];
     doRun(buf);
-    
-    if (evaluateRun1(buf)) {
-        buf[INPUT_LEN/2] = '!';
+
+    if (!evaluateRun1(buf)) {
+        exit(0);
     }
+    memset(buf, 0, INPUT_LEN);
     doRun(buf);
     if (evaluateRun2(buf)) {
         exit(1);

@@ -10,31 +10,21 @@ class BombSquadAnalysis:
     def __init__(self, project, loop):
         self._LOOP_ITERATION_KEY = 'bombSquadLoopIteration'
         self._LOOPED_FLAG_KEY = 'bombSquadLoopFlag'
-        self._INSTRUMENTATION_KEY = 'bombSquadExecutionPath'
-        self._LOOP_CONTEXT_KEY = 'bombSquadLoopContextKey'
         self.project = project
         self.loop = loop
-        print loop.entry.addr
         state = self.project.factory.blank_state(addr=loop.entry.addr)
         self.simgr = self.project.factory.simgr(state)
         self.initInstrumentation(state)
-        self.findCommutativePaths()
 
     def initInstrumentation(self, state):
         state.globals[self._LOOP_ITERATION_KEY] = 0
         state.globals[self._LOOPED_FLAG_KEY] = False
-        state.globals[self._LOOP_CONTEXT_KEY] = None
+
         def incrementLoopCounter(state):
             state.globals[self._LOOP_ITERATION_KEY]+=1
             state.globals[self._LOOPED_FLAG_KEY] = True
 
-        def initLoopContext(state):
-            state.globals[self._LOOP_CONTEXT_KEY] = hash(tuple(state.history.bbl_addrs))
-
         state.inspect.b('instruction', when=BP_BEFORE, instruction=self.loop.entry.addr, action=incrementLoopCounter)
-
-        for entry_edge in self.loop.entry_edges:
-            state.inspect.b('instruction', when=BP_BEFORE, instruction=entry_edge[0], action=initLoopContext)
 
     def findCommutativePaths(self):
         states = self._loopTwice(self.simgr, self.loop)
@@ -50,12 +40,17 @@ class BombSquadAnalysis:
         return self.commutativePaths
 
     def _getPathHashes(self, state):
-        entirePath = [addr for addr in list(state.history.bbl_addrs) if addr in [node.addr for node in self.loop.body_nodes]][::-1]
-        splitPaths = [list(group) for k, group in groupby(entirePath, lambda x: x == self.loop.entry.addr) if not k]
-        if entirePath[0] != self.loop.entry.addr:
-            splitPaths = splitPaths[:-1]
-        splitPathTuples = [tuple(path) for path in splitPaths]
-        splitPathHashes = [hash(t) for t in splitPathTuples]
+        entryAddrs = [start.addr for start,finish in self.loop.entry_edges]
+
+        # We may have been through this loop multiple times, in different stack frames, etc. But we'll start with the entire history.
+        fullHistory = list(state.history.bbl_addrs)
+        splitHistory = [list(group) for k, group in groupby(fullHistory, lambda x: x in entryAddrs) if not k]
+
+        # This is the path through the loop in terms of its own basic blocks
+        loopPath = [addr for addr in splitHistory[0] if addr in [node.addr for node in self.loop.body_nodes]]
+        # Split paths into tuples by the loop entry point
+        splitPaths = [tuple(list(group)) for k, group in groupby(loopPath, lambda x: x == self.loop.entry.addr) if not k]
+        splitPathHashes = [hash(t) for t in splitPaths]
         return splitPathHashes
 
     def exitedLoopOrAtEntry(self, state):
@@ -67,10 +62,11 @@ class BombSquadAnalysis:
         else:
             return state.block().addr not in [node.addr for node in self.loop.body_nodes]
 
+    def atLoopInit(self, state):
+        return state.block().addr in [first.addr for first, second in self.loop.entry_edges]
+
     def canCollapseStates(self, s1, s2):
         if s1.globals[self._LOOP_ITERATION_KEY] != s2.globals[self._LOOP_ITERATION_KEY] or s1.globals[self._LOOP_ITERATION_KEY] == 0:
-            return False
-        if s1.globals[self._LOOP_CONTEXT_KEY] is not s2.globals[self._LOOP_CONTEXT_KEY]:
             return False
         p1 = self._getPathHashes(s1)
         p2 = self._getPathHashes(s2)
@@ -163,16 +159,16 @@ class BombSquadAnalysis:
                     return False
         return True
 
-    def _deactivateStates(self):
-        self.simgr.move(filter_func=lambda state: state.block().addr not in self.loopBlocks, from_stash='active', to_stash='exited_loop')
-        self.simgr.move(filter_func=lambda state: state.globals[self._LOOP_ITERATION_KEY] > 2, from_stash='active', to_stash='done')
+    def _deactivateStates(self, simManager):
+        simManager.move(filter_func=lambda state: state.block().addr in self.loopExitBlocks, from_stash='active', to_stash='exited_loop')
+        simManager.move(filter_func=lambda state: state.globals[self._LOOP_ITERATION_KEY] > 2, from_stash='active', to_stash='done')
 
     def _loopTwice(self, simManager, loop):
         self.loopExitBlocks = [finish.addr for start,finish in loop.break_edges]
         self.loopBlocks = [node.addr for node in loop.body_nodes] + self.loopExitBlocks
 
         while len(simManager.active) != 0:
-            self.simgr.step()
-            self._deactivateStates()
+            self.simgr.step(n=1)
+            self._deactivateStates(simManager)
 
         return simManager.stashes['done']
